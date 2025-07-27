@@ -1,0 +1,73 @@
+services:
+  openmeter:
+    image: ghcr.io/openmeterio/openmeter:latest
+    command: openmeter --address 0.0.0.0:8888 --config /etc/openmeter/config.yaml
+    restart: always
+    pull_policy: always
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./config.yaml:/etc/openmeter/config.yaml
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://openmeter:8888/api/v1/debug/metrics"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  sink-worker:
+    image: ghcr.io/openmeterio/openmeter:latest
+    command: openmeter-sink-worker --config /etc/openmeter/config.yaml
+    restart: always
+    pull_policy: always
+    depends_on:
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      openmeter:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "10000:10000"
+    volumes:
+      - ./config.yaml:/etc/openmeter/config.yaml
+
+  kafka:
+    extends:
+      file: ../docker-compose.yaml
+      service: kafka
+
+  clickhouse:
+    extends:
+      file: ../docker-compose.yaml
+      service: clickhouse
+
+  redis:
+    image: redis:7.0-alpine
+    command: ["redis-server", "--maxmemory", "50mb", "--maxmemory-policy", "noeviction", "--maxmemory-samples", "10"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  postgres:
+    image: postgres:14.9-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=postgres
+      - POSTGRES_PASSWORD=postgres
+    command: ["postgres", "-c", "wal_level=logical"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "$${POSTGRES_DB}", "-U", "$${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
