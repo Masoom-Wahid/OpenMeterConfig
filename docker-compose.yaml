@@ -42,12 +42,12 @@ services:
 
   kafka:
     extends:
-      file: ../docker-compose.yaml
+      file: ./docker-compose-clickhouse.yaml
       service: kafka
 
   clickhouse:
     extends:
-      file: ../docker-compose.yaml
+      file: ./docker-compose-clickhouse.yaml
       service: clickhouse
 
   redis:
